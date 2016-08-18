@@ -58,7 +58,6 @@ def get_batch(reader):
 
         inputs[i] = row[:6]
         gts[i] = imread(os.path.join(c.FRAME_DIR, row[-1]))
-        imsave('test.png', gts[i])
 
     return inputs, gts
 
