@@ -227,6 +227,7 @@ class GeneratorModel:
         ##
 
         inputs, gt_frames = batch
+        imsave('test.png', gt_frames[0])
 
         ##
         # Train
