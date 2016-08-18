@@ -43,7 +43,7 @@ def clear_dir(directory):
             print(e)
 
 # def get_test_frame_dims():
-#     img_path = glob(TEST_DIR + '*/*')[0]
+#     img_path = glob(os.path.join(TEST_DIR, '*/*'))[0]
 #     img = imread(img_path, mode='RGB')
 #     shape = np.shape(img)
 #
@@ -64,11 +64,11 @@ def clear_dir(directory):
 # root directory for all data
 DATA_DIR = get_dir('../Data/')
 # path to train data file
-TRAIN_PATH = DATA_DIR + 'train.csv'
+TRAIN_PATH = os.path.join(DATA_DIR, 'train.csv')
 # path to test data file
-TEST_PATH = DATA_DIR + 'test.csv'
+TEST_PATH = os.path.join(DATA_DIR, 'test.csv')
 # directory of frames
-FRAME_DIR = DATA_DIR + 'Frames/'
+FRAME_DIR = os.path.join(DATA_DIR, 'Frames/')
 
 # num data points in total
 NUM_DATA = 99982
@@ -94,9 +94,9 @@ def set_save_name(name):
     global SAVE_NAME, MODEL_SAVE_DIR, SUMMARY_SAVE_DIR, IMG_SAVE_DIR
 
     SAVE_NAME = name
-    MODEL_SAVE_DIR = get_dir(SAVE_DIR + 'Models/' + SAVE_NAME)
-    SUMMARY_SAVE_DIR = get_dir(SAVE_DIR + 'Summaries/' + SAVE_NAME)
-    IMG_SAVE_DIR = get_dir(SAVE_DIR + 'Images/' + SAVE_NAME)
+    MODEL_SAVE_DIR = get_dir(os.path.join(SAVE_DIR, 'Models', SAVE_NAME))
+    SUMMARY_SAVE_DIR = get_dir(os.path.join(SAVE_DIR, 'Summaries', SAVE_NAME))
+    IMG_SAVE_DIR = get_dir(os.path.join(SAVE_DIR, 'Images', SAVE_NAME))
 
 def clear_save_name():
     """
@@ -113,11 +113,11 @@ SAVE_DIR = get_dir('../Save/')
 # inner directory to differentiate between runs
 SAVE_NAME = 'Default/'
 # directory for saved models
-MODEL_SAVE_DIR = get_dir(SAVE_DIR + 'Models/' + SAVE_NAME)
+MODEL_SAVE_DIR = get_dir(os.path.join(SAVE_DIR, 'Models', SAVE_NAME))
 # directory for saved TensorBoard summaries
-SUMMARY_SAVE_DIR = get_dir(SAVE_DIR + 'Summaries/' + SAVE_NAME)
+SUMMARY_SAVE_DIR = get_dir(os.path.join(SAVE_DIR, 'Summaries', SAVE_NAME))
 # directory for saved images
-IMG_SAVE_DIR = get_dir(SAVE_DIR + 'Images/' + SAVE_NAME)
+IMG_SAVE_DIR = get_dir(os.path.join(SAVE_DIR, 'Images', SAVE_NAME))
 
 STATS_FREQ      = 10     # how often to print loss/train error stats, in # steps
 SUMMARY_FREQ    = 100    # how often to save the summaries, in # steps
