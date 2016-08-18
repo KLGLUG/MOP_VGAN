@@ -22,7 +22,7 @@ class DiscriminatorModel:
                                      scale network.
         @param scale_kernel_sizes: The size of the kernel for each layer of each scale network.
         @param scale_fc_layer_sizes: The number of nodes in each fully-connected layer of each scale
-                               network.
+                                     network.
 
         @type session: tf.Session
         @type summary_writer: tf.train.SummaryWriter

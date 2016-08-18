@@ -11,38 +11,38 @@ from tfutils import w, b
 
 # noinspection PyShadowingNames
 class GeneratorModel:
-    def __init__(self, session, summary_writer, height_train, width_train, height_test,
-                 width_test, scale_layer_fms, scale_kernel_sizes):
+    def __init__(self, session, summary_writer, height, width, scale_fc_layer_sizes,
+                 scale_conv_layer_fms, scale_kernel_sizes):
         """
         Initializes a GeneratorModel.
 
         @param session: The TensorFlow Session.
         @param summary_writer: The writer object to record TensorBoard summaries
-        @param height_train: The height of the input images for training.
-        @param width_train: The width of the input images for training.
-        @param height_train: The height of the input images for testing.
-        @param width_train: The width of the input images for testing.
-        @param scale_layer_fms: The number of feature maps in each layer of each scale network.
-        @param scale_kernel_sizes: The size of the kernel for each layer of each scale network.
+        @param height: The height of the input images for training.
+        @param width: The width of the input images for training.
+        @param scale_fc_layer_sizes: The number of nodes in each fully-connected layer of each scale
+                                     network.
+        @param scale_conv_layer_fms: The number of feature maps in each convolutional layer of each
+                                     scale network.
+        @param scale_kernel_sizes: The size of the kernel for each convolutional layer of each scale
+                                   network.
 
         @type session: tf.Session
         @type summary_writer: tf.train.SummaryWriter
-        @type height_train: int
-        @type width_train: int
-        @type height_test: int
-        @type width_test: int
-        @type scale_layer_fms: list<list<int>>
+        @type height: int
+        @type width: int
+        @type scale_fc_layer_sizes: list<list<int>>
+        @type scale_conv_layer_fms: list<list<int>>
         @type scale_kernel_sizes: list<list<int>>
         """
         self.sess = session
         self.summary_writer = summary_writer
-        self.height_train = height_train
-        self.width_train = width_train
-        self.height_test = height_test
-        self.width_test = width_test
-        self.scale_layer_fms = scale_layer_fms
+        self.height = height
+        self.width = width
+        self.scale_fc_layer_sizes = scale_fc_layer_sizes
+        self.scale_conv_layer_fms = scale_conv_layer_fms
         self.scale_kernel_sizes = scale_kernel_sizes
-        self.num_scale_nets = len(scale_layer_fms)
+        self.num_scale_nets = len(scale_conv_layer_fms)
 
         self.define_graph()
 
@@ -57,46 +57,46 @@ class GeneratorModel:
             ##
 
             with tf.name_scope('data'):
-                self.input_frames_train = tf.placeholder(
-                    tf.float32, shape=[None, self.height_train, self.width_train, 3 * c.HIST_LEN])
-                self.gt_frames_train = tf.placeholder(
-                    tf.float32, shape=[None, self.height_train, self.width_train, 3])
-
-                self.input_frames_test = tf.placeholder(
-                    tf.float32, shape=[None, self.height_test, self.width_test, 3 * c.HIST_LEN])
-                self.gt_frames_test = tf.placeholder(
-                    tf.float32, shape=[None, self.height_test, self.width_test, 3])
+                self.inputs = tf.placeholder(tf.float32, shape=[None, 6])
+                self.gt_frames = tf.placeholder(
+                    tf.float32, shape=[None, self.height, self.width, 3])
 
                 # use variable batch_size for more flexibility
-                self.batch_size_train = tf.shape(self.input_frames_train)[0]
-                self.batch_size_test = tf.shape(self.input_frames_test)[0]
+                self.batch_size = tf.shape(self.inputs)[0]
 
             ##
             # Scale network setup and calculation
             ##
 
-            self.summaries_train = []
-            self.scale_preds_train = []  # the generated images at each scale
-            self.scale_gts_train = []  # the ground truth images at each scale
+            self.summaries = []
+            self.scale_preds = []  # the generated images at each scale
+            self.scale_gts = []  # the ground truth images at each scale
             self.d_scale_preds = []  # the predictions from the discriminator model
-
-            self.summaries_test = []
-            self.scale_preds_test = []  # the generated images at each scale
-            self.scale_gts_test = []  # the ground truth images at each scale
 
             for scale_num in xrange(self.num_scale_nets):
                 with tf.name_scope('scale_' + str(scale_num)):
                     with tf.name_scope('setup'):
-                        ws = []
-                        bs = []
+                        with tf.name_scope('fully-connected'):
+                            fc_ws = []
+                            fc_bs = []
 
-                        # create weights for kernels
-                        for i in xrange(len(self.scale_kernel_sizes[scale_num])):
-                            ws.append(w([self.scale_kernel_sizes[scale_num][i],
-                                         self.scale_kernel_sizes[scale_num][i],
-                                         self.scale_layer_fms[scale_num][i],
-                                         self.scale_layer_fms[scale_num][i + 1]]))
-                            bs.append(b([self.scale_layer_fms[scale_num][i + 1]]))
+                            # create weights for fc layers
+                            for i in xrange(len(self.scale_fc_layer_sizes[scale_num]) - 1):
+                                fc_ws.append(w([self.scale_fc_layer_sizes[scale_num][i],
+                                                self.scale_fc_layer_sizes[scale_num][i + 1]]))
+                                fc_bs.append(b([self.scale_fc_layer_sizes[scale_num][i + 1]]))
+
+                        with tf.name_scope('convolutions'):
+                            conv_ws = []
+                            conv_bs = []
+
+                            # create weights for kernels
+                            for i in xrange(len(self.scale_kernel_sizes[scale_num])):
+                                conv_ws.append(w([self.scale_kernel_sizes[scale_num][i],
+                                               self.scale_kernel_sizes[scale_num][i],
+                                               self.scale_conv_layer_fms[scale_num][i],
+                                               self.scale_conv_layer_fms[scale_num][i + 1]]))
+                                conv_bs.append(b([self.scale_conv_layer_fms[scale_num][i + 1]]))
 
                     with tf.name_scope('calculation'):
                         def calculate(height, width, inputs, gts, last_gen_frames):
@@ -105,32 +105,42 @@ class GeneratorModel:
                             scale_height = int(height * scale_factor)
                             scale_width = int(width * scale_factor)
 
-                            inputs = tf.image.resize_images(inputs, scale_height, scale_width)
                             scale_gts = tf.image.resize_images(gts, scale_height, scale_width)
 
                             # for all scales but the first, add the frame generated by the last
                             # scale to the input
-                            if scale_num > 0:
-                                last_gen_frames = tf.image.resize_images(last_gen_frames,
-                                                                         scale_height,
-                                                                         scale_width)
-                                inputs = tf.concat(3, [inputs, last_gen_frames])
+                            # if scale_num > 0:
+                            #     last_gen_frames = tf.image.resize_images(last_gen_frames,
+                            #                                              scale_height,
+                            #                                              scale_width)
+                            #     inputs = tf.concat(3, [inputs, last_gen_frames])
 
                             # generated frame predictions
                             preds = inputs
+
+                            # perform fc multiplications
+                            with tf.name_scope('fully-connected'):
+                                for i in xrange(len(self.scale_fc_layer_sizes[scale_num]) - 1):
+                                    preds = tf.nn.relu(tf.matmul(preds, fc_ws[i]) + fc_bs[i])
+
+                                # reshape for convolutions
+                                preds = tf.reshape(preds, [-1,
+                                                           c.FRAME_HEIGHT,
+                                                           c.FRAME_WIDTH,
+                                                           self.scale_conv_layer_fms[scale_num][0]])
 
                             # perform convolutions
                             with tf.name_scope('convolutions'):
                                 for i in xrange(len(self.scale_kernel_sizes[scale_num])):
                                     # Convolve layer
                                     preds = tf.nn.conv2d(
-                                        preds, ws[i], [1, 1, 1, 1], padding=c.PADDING_G)
+                                        preds, conv_ws[i], [1, 1, 1, 1], padding=c.PADDING_G)
 
                                     # Activate with ReLU (or Tanh for last layer)
                                     if i == len(self.scale_kernel_sizes[scale_num]) - 1:
-                                        preds = tf.nn.tanh(preds + bs[i])
+                                        preds = tf.nn.tanh(preds + conv_bs[i])
                                     else:
-                                        preds = tf.nn.relu(preds + bs[i])
+                                        preds = tf.nn.relu(preds + conv_bs[i])
 
                             return preds, scale_gts
 
@@ -141,18 +151,18 @@ class GeneratorModel:
                         # for all scales but the first, add the frame generated by the last
                         # scale to the input
                         if scale_num > 0:
-                            last_scale_pred_train = self.scale_preds_train[scale_num - 1]
+                            last_scale_pred = self.scale_preds[scale_num - 1]
                         else:
-                            last_scale_pred_train = None
+                            last_scale_pred = None
 
                         # calculate
-                        train_preds, train_gts = calculate(self.height_train,
-                                                           self.width_train,
-                                                           self.input_frames_train,
-                                                           self.gt_frames_train,
-                                                           last_scale_pred_train)
-                        self.scale_preds_train.append(train_preds)
-                        self.scale_gts_train.append(train_gts)
+                        train_preds, train_gts = calculate(self.height,
+                                                           self.width,
+                                                           self.inputs,
+                                                           self.gt_frames,
+                                                           last_scale_pred)
+                        self.scale_preds.append(train_preds)
+                        self.scale_gts.append(train_gts)
 
                         # We need to run the network first to get generated frames, run the
                         # discriminator on those frames to get d_scale_preds, then run this
@@ -160,25 +170,6 @@ class GeneratorModel:
                         if c.ADVERSARIAL:
                             self.d_scale_preds.append(tf.placeholder(tf.float32, [None, 1]))
 
-                        ##
-                        # Perform test calculation
-                        ##
-
-                        # for all scales but the first, add the frame generated by the last
-                        # scale to the input
-                        if scale_num > 0:
-                            last_scale_pred_test = self.scale_preds_test[scale_num - 1]
-                        else:
-                            last_scale_pred_test = None
-
-                        # calculate
-                        test_preds, test_gts = calculate(self.height_test,
-                                                         self.width_test,
-                                                         self.input_frames_test,
-                                                         self.gt_frames_test,
-                                                         last_scale_pred_test)
-                        self.scale_preds_test.append(test_preds)
-                        self.scale_gts_test.append(test_gts)
 
             ##
             # Training
@@ -186,8 +177,8 @@ class GeneratorModel:
 
             with tf.name_scope('train'):
                 # global loss is the combined loss from every scale network
-                self.global_loss = combined_loss(self.scale_preds_train,
-                                                 self.scale_gts_train,
+                self.global_loss = combined_loss(self.scale_preds,
+                                                 self.scale_gts,
                                                  self.d_scale_preds)
                 self.global_step = tf.Variable(0, trainable=False)
                 self.optimizer = tf.train.AdamOptimizer(learning_rate=c.LRATE_G, name='optimizer')
@@ -197,7 +188,7 @@ class GeneratorModel:
 
                 # train loss summary
                 loss_summary = tf.scalar_summary('train_loss_G', self.global_loss)
-                self.summaries_train.append(loss_summary)
+                self.summaries.append(loss_summary)
 
             ##
             # Error
@@ -206,39 +197,26 @@ class GeneratorModel:
             with tf.name_scope('error'):
                 # error computation
                 # get error at largest scale
-                self.psnr_error_train = psnr_error(self.scale_preds_train[-1],
-                                                   self.gt_frames_train)
-                self.sharpdiff_error_train = sharp_diff_error(self.scale_preds_train[-1],
-                                                              self.gt_frames_train)
-                self.psnr_error_test = psnr_error(self.scale_preds_test[-1],
-                                                  self.gt_frames_test)
-                self.sharpdiff_error_test = sharp_diff_error(self.scale_preds_test[-1],
-                                                             self.gt_frames_test)
-                # train error summaries
-                summary_psnr_train = tf.scalar_summary('train_PSNR',
-                                                       self.psnr_error_train)
-                summary_sharpdiff_train = tf.scalar_summary('train_SharpDiff',
-                                                            self.sharpdiff_error_train)
-                self.summaries_train += [summary_psnr_train, summary_sharpdiff_train]
+                self.psnr_error = psnr_error(self.scale_preds[-1],
+                                                   self.gt_frames)
+                self.sharpdiff_error = sharp_diff_error(self.scale_preds[-1],
+                                                              self.gt_frames)
 
-                # test error
-                summary_psnr_test = tf.scalar_summary('test_PSNR',
-                                                      self.psnr_error_test)
-                summary_sharpdiff_test = tf.scalar_summary('test_SharpDiff',
-                                                           self.sharpdiff_error_test)
-                self.summaries_test += [summary_psnr_test, summary_sharpdiff_test]
+                # train error summaries
+                summary_psnr = tf.scalar_summary('train_PSNR',
+                                                       self.psnr_error)
+                summary_sharpdiff = tf.scalar_summary('train_SharpDiff',
+                                                            self.sharpdiff_error)
+                self.summaries += [summary_psnr, summary_sharpdiff]
 
             # add summaries to visualize in TensorBoard
-            self.summaries_train = tf.merge_summary(self.summaries_train)
-            self.summaries_test = tf.merge_summary(self.summaries_test)
+            self.summaries = tf.merge_summary(self.summaries)
 
     def train_step(self, batch, discriminator=None):
         """
         Runs a training step using the global loss on each of the scale networks.
 
-        @param batch: An array of shape
-                      [c.BATCH_SIZE x self.height x self.width x (3 * (c.HIST_LEN + 1))].
-                      The input and output frames, concatenated along the channel axis (index 3).
+        @param batch: A tuple, (inputs, gt_outputs), of the network inputs and ground_truth frames.
         @param discriminator: The discriminator model. Default = None, if not adversarial.
 
         @return: The global step.
@@ -247,18 +225,17 @@ class GeneratorModel:
         # Split into inputs and outputs
         ##
 
-        input_frames = batch[:, :, :, :-3]
-        gt_frames = batch[:, :, :, -3:]
+        inputs, gt_frames = batch
 
         ##
         # Train
         ##
 
-        feed_dict = {self.input_frames_train: input_frames, self.gt_frames_train: gt_frames}
+        feed_dict = {self.inputs: inputs, self.gt_frames: gt_frames}
 
         if c.ADVERSARIAL:
             # Run the generator first to get generated frames
-            scale_preds = self.sess.run(self.scale_preds_train, feed_dict=feed_dict)
+            scale_preds = self.sess.run(self.scale_preds, feed_dict=feed_dict)
 
             # Run the discriminator nets on those frames to get predictions
             d_feed_dict = {}
@@ -273,10 +250,10 @@ class GeneratorModel:
         _, global_loss, global_psnr_error, global_sharpdiff_error, global_step, summaries = \
             self.sess.run([self.train_op,
                            self.global_loss,
-                           self.psnr_error_train,
-                           self.sharpdiff_error_train,
+                           self.psnr_error,
+                           self.sharpdiff_error,
                            self.global_step,
-                           self.summaries_train],
+                           self.summaries],
                           feed_dict=feed_dict)
 
         ##
@@ -297,16 +274,16 @@ class GeneratorModel:
             # if not adversarial, we didn't get the preds for each scale net before for the
             # discriminator prediction, so do it now
             if not c.ADVERSARIAL:
-                scale_preds = self.sess.run(self.scale_preds_train, feed_dict=feed_dict)
+                scale_preds = self.sess.run(self.scale_preds, feed_dict=feed_dict)
 
             # re-generate scale gt_frames to avoid having to run through TensorFlow.
             scale_gts = []
             for scale_num in xrange(self.num_scale_nets):
                 scale_factor = 1. / 2 ** ((self.num_scale_nets - 1) - scale_num)
-                scale_height = int(self.height_train * scale_factor)
-                scale_width = int(self.width_train * scale_factor)
+                scale_height = int(self.height * scale_factor)
+                scale_width = int(self.width * scale_factor)
 
-                # resize gt_output_frames for scale and append to scale_gts_train
+                # resize gt_output_frames for scale and append to scale_gts
                 scaled_gt_frames = np.empty([c.BATCH_SIZE, scale_height, scale_width, 3])
                 for i, img in enumerate(gt_frames):
                     # for skimage.transform.resize, images need to be in range [0, 1], so normalize
@@ -316,15 +293,10 @@ class GeneratorModel:
                     scaled_gt_frames[i] = (resized_frame - 0.5) * 2
                 scale_gts.append(scaled_gt_frames)
 
-            # for every clip in the batch, save the inputs, scale preds and scale gts
-            for pred_num in xrange(len(input_frames)):
+            # for every input in the batch, save the scale preds and scale gts
+            for pred_num in xrange(len(gt_frames)):
                 pred_dir = c.get_dir(c.IMG_SAVE_DIR + 'Step_' + str(global_step) + '/' + str(
                     pred_num) + '/')
-
-                # save input images
-                for frame_num in xrange(c.HIST_LEN):
-                    img = input_frames[pred_num, :, :, (frame_num * 3):((frame_num + 1) * 3)]
-                    imsave(pred_dir + 'input_' + str(frame_num) + '.png', img)
 
                 # save preds and gts at each scale
                 # noinspection PyUnboundLocalVariable

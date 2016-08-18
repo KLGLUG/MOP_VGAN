@@ -1,74 +1,52 @@
 import numpy as np
-import getopt
-import sys
-from glob import glob
+import csv
+from random import shuffle
+from scipy.misc import imread, imsave
 
 import constants as c
-from utils import process_clip
 
-
-def process_training_data(num_clips):
+def test_train_split(data_file, test_file, train_file, num_test):
     """
-    Processes random training clips from the full training data. Saves to TRAIN_DIR_CLIPS by
-    default.
+    Split data into random train and test sets.
 
-    @param num_clips: The number of clips to process. Default = 5000000 (set in __main__).
-
-    @warning: This can take a couple of hours to complete with large numbers of clips.
+    @param data_file: The filepath to the unsplit data.
+    @param test_file: The filepath to which to write the test data.
+    @param train_file: The filepath to which to write the train data.
+    @param num_test: The desired size of the test set. The train set will be the total number of
+                     data points, minus num_test. num_test must be < total number of data points.
     """
-    num_prev_clips = len(glob(c.TRAIN_DIR_CLIPS + '*'))
+    # get random indices for tests
+    test_indices = np.random.choice(c.NUM_DATA, num_test, replace=False)
 
-    for clip_num in xrange(num_prev_clips, num_clips + num_prev_clips):
-        clip = process_clip()
+    test = []
+    train = []
 
-        np.savez_compressed(c.TRAIN_DIR_CLIPS + str(clip_num), clip)
+    w_test = csv.writer(open(test_file, 'wb'))
+    w_train = csv.writer(open(train_file, 'wb'))
 
-        if (clip_num + 1) % 100 == 0: print 'Processed %d clips' % (clip_num + 1)
+    with open(data_file, 'r') as f:
+        reader = csv.reader(f)
+        reader.next()
+        for i, row in enumerate(reader):
+            if i in test_indices:
+                test.append(row)
+            else:
+                train.append(row)
 
+            print i
 
-def usage():
-    print 'Options:'
-    print '-n/--num_clips= <# clips to process for training> (Default = 5000000)'
-    print '-t/--train_dir= <Directory of full training frames>'
-    print '-c/--clips_dir= <Save directory for processed clips>'
-    print "                (I suggest making this a hidden dir so the filesystem doesn't freeze"
-    print "                 with so many files. DON'T `ls` THIS DIRECTORY!)"
-    print '-o/--overwrite  (Overwrites the previous data in clips_dir)'
-    print '-H/--help       (Prints usage)'
+    shuffle(test)
+    shuffle(train)
+
+    w_test.writerows(test)
+    w_train.writerows(train)
+
+# def img_to_grayscale():
 
 
 def main():
-    ##
-    # Handle command line input
-    ##
+    test_train_split('../Data/index', '../Data/test.csv', '../Data/train.csv', 1000)
 
-    num_clips = 5000000
-
-    try:
-        opts, _ = getopt.getopt(sys.argv[1:], 'n:t:c:oH',
-                                ['num_clips=', 'train_dir=', 'clips_dir=', 'overwrite', 'help'])
-    except getopt.GetoptError:
-        usage()
-        sys.exit(2)
-
-    for opt, arg in opts:
-        if opt in ('-n', '--num_clips'):
-            num_clips = int(arg)
-        if opt in ('-t', '--train_dir'):
-            c.TRAIN_DIR = c.get_dir(arg)
-        if opt in ('-c', '--clips_dir'):
-            c.TRAIN_DIR_CLIPS = c.get_dir(arg)
-        if opt in ('-o', '--overwrite'):
-            c.clear_dir(c.TRAIN_DIR_CLIPS)
-        if opt in ('-H', '--help'):
-            usage()
-            sys.exit(2)
-
-    ##
-    # Process data for training
-    ##
-
-    process_training_data(num_clips)
 
 
 if __name__ == '__main__':

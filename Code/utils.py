@@ -40,111 +40,25 @@ def denormalize_frames(frames):
 
     return new_frames
 
-def clip_l2_diff(clip):
+def get_batch(reader):
     """
-    @param clip: A numpy array of shape [c.TRAIN_HEIGHT, c.TRAIN_WIDTH, (3 * (c.HIST_LEN + 1))].
-    @return: The sum of l2 differences between the frame pixels of each sequential pair of frames.
+    Parses csv rows to get the inputs and outputs.
+
+    @param reader: The csv reader to read rows.
+    @return: A tuple, (inputs, gt_outputs), of the network inputs and ground_truth outputs.
     """
-    diff = 0
-    for i in xrange(c.HIST_LEN):
-        frame = clip[:, :, 3 * i:3 * (i + 1)]
-        next_frame = clip[:, :, 3 * (i + 1):3 * (i + 2)]
-        # noinspection PyTypeChecker
-        diff += np.sum(np.square(next_frame - frame))
+    # in the second dimension, we save:
+    # paddle1_x, paddle1_y, ball_x, ball_y, paddle2_x, paddle2_y
+    inputs = np.empty([c.BATCH_SIZE, 6])
+    gts = np.empty([c.BATCH_SIZE, c.FRAME_HEIGHT, c.FRAME_WIDTH, 3])
 
-    return diff
-
-def get_full_clips(data_dir, num_clips, num_rec_out=1):
-    """
-    Loads a batch of random clips from the unprocessed train or test data.
-
-    @param data_dir: The directory of the data to read. Should be either c.TRAIN_DIR or c.TEST_DIR.
-    @param num_clips: The number of clips to read.
-    @param num_rec_out: The number of outputs to predict. Outputs > 1 are computed recursively,
-                        using the previously-generated frames as input. Default = 1.
-
-    @return: An array of shape
-             [num_clips, c.TRAIN_HEIGHT, c.TRAIN_WIDTH, (3 * (c.HIST_LEN + num_rec_out))].
-             A batch of frame sequences with values normalized in range [-1, 1].
-    """
-    clips = np.empty([num_clips,
-                      c.TEST_HEIGHT,
-                      c.TEST_WIDTH,
-                      (3 * (c.HIST_LEN + num_rec_out))])
-
-    # get num_clips random episodes
-    ep_dirs = np.random.choice(glob(data_dir + '*'), num_clips)
-
-    # get a random clip of length HIST_LEN + 1 from each episode
-    for clip_num, ep_dir in enumerate(ep_dirs):
-        ep_frame_paths = glob(ep_dir + '/*')
-        start_index = np.random.choice(len(ep_frame_paths) - (c.HIST_LEN + num_rec_out - 1))
-        clip_frame_paths = ep_frame_paths[start_index:start_index + (c.HIST_LEN + num_rec_out)]
-
-        # read in frames
-        for frame_num, frame_path in enumerate(clip_frame_paths):
-            frame = imread(frame_path, mode='RGB')
-            norm_frame = normalize_frames(frame)
-
-            clips[clip_num, :, :, frame_num * 3:(frame_num + 1) * 3] = norm_frame
-
-    return clips
-
-def process_clip():
-    """
-    Gets a clip from the train dataset, cropped randomly to c.TRAIN_HEIGHT x c.TRAIN_WIDTH.
-
-    @return: An array of shape [c.TRAIN_HEIGHT, c.TRAIN_WIDTH, (3 * (c.HIST_LEN + 1))].
-             A frame sequence with values normalized in range [-1, 1].
-    """
-    clip = get_full_clips(c.TRAIN_DIR, 1)[0]
-
-    # Randomly crop the clip. With 0.05 probability, take the first crop offered, otherwise,
-    # repeat until we have a clip with movement in it.
-    take_first = np.random.choice(2, p=[0.95, 0.05])
-    cropped_clip = np.empty([c.TRAIN_HEIGHT, c.TRAIN_WIDTH, 3 * (c.HIST_LEN + 1)])
-    for i in xrange(100):  # cap at 100 trials in case the clip has no movement anywhere
-        crop_x = np.random.choice(c.TEST_WIDTH - c.TRAIN_WIDTH + 1)
-        crop_y = np.random.choice(c.TEST_HEIGHT - c.TRAIN_HEIGHT + 1)
-        cropped_clip = clip[crop_y:crop_y + c.TRAIN_HEIGHT, crop_x:crop_x + c.TRAIN_WIDTH, :]
-
-        if take_first or clip_l2_diff(cropped_clip) > c.MOVEMENT_THRESHOLD:
-            break
-
-    return cropped_clip
-
-def get_train_batch():
-    """
-    Loads c.BATCH_SIZE clips from the database of preprocessed training clips.
-
-    @return: An array of shape
-            [c.BATCH_SIZE, c.TRAIN_HEIGHT, c.TRAIN_WIDTH, (3 * (c.HIST_LEN + 1))].
-    """
-    clips = np.empty([c.BATCH_SIZE, c.TRAIN_HEIGHT, c.TRAIN_WIDTH, (3 * (c.HIST_LEN + 1))],
-                     dtype=np.float32)
     for i in xrange(c.BATCH_SIZE):
-        path = c.TRAIN_DIR_CLIPS + str(np.random.choice(c.NUM_CLIPS)) + '.npz'
-        clip = np.load(path)['arr_0']
+        row = reader.next()
 
-        clips[i] = clip
+        inputs[i] = row[:6]
+        gts[i] = imread(c.FRAME_DIR + row[-1])
 
-    return clips
-
-
-def get_test_batch(test_batch_size, num_rec_out=1):
-    """
-    Gets a clip from the test dataset.
-
-    @param test_batch_size: The number of clips.
-    @param num_rec_out: The number of outputs to predict. Outputs > 1 are computed recursively,
-                        using the previously-generated frames as input. Default = 1.
-
-    @return: An array of shape:
-             [test_batch_size, c.TEST_HEIGHT, c.TEST_WIDTH, (3 * (c.HIST_LEN + num_rec_out))].
-             A batch of frame sequences with values normalized in range [-1, 1].
-    """
-    return get_full_clips(c.TEST_DIR, test_batch_size, num_rec_out=num_rec_out)
-
+    return inputs, gts
 
 ##
 # Error calculation

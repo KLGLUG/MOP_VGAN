@@ -42,43 +42,44 @@ def clear_dir(directory):
         except Exception as e:
             print(e)
 
-def get_test_frame_dims():
-    img_path = glob(TEST_DIR + '*/*')[0]
-    img = imread(img_path, mode='RGB')
-    shape = np.shape(img)
-
-    return shape[0], shape[1]
-
-def set_test_dir(directory):
-    """
-    Edits all constants dependent on TEST_DIR.
-
-    @param directory: The new test directory.
-    """
-    global TEST_DIR, TEST_HEIGHT, TEST_WIDTH
-
-    TEST_DIR = directory
-    TEST_HEIGHT, TEST_WIDTH = get_test_frame_dims()
+# def get_test_frame_dims():
+#     img_path = glob(TEST_DIR + '*/*')[0]
+#     img = imread(img_path, mode='RGB')
+#     shape = np.shape(img)
+#
+#     # noinspection PyUnresolvedReferences
+#     return shape[0], shape[1]
+#
+# def set_test_dir(directory):
+#     """
+#     Edits all constants dependent on TEST_DIR.
+#
+#     @param directory: The new test directory.
+#     """
+#     global TEST_DIR, TEST_HEIGHT, TEST_WIDTH
+#
+#     TEST_DIR = directory
+#     TEST_HEIGHT, TEST_WIDTH = get_test_frame_dims()
 
 # root directory for all data
 DATA_DIR = get_dir('../Data/')
-# directory of unprocessed training frames
-TRAIN_DIR = DATA_DIR + 'Ms_Pacman/Train/'
-# directory of unprocessed test frames
-TEST_DIR = DATA_DIR + 'Ms_Pacman/Test/'
-# Directory of processed training clips.
-# hidden so finder doesn't freeze w/ so many files. DON'T USE `ls` COMMAND ON THIS DIR!
-TRAIN_DIR_CLIPS = get_dir(DATA_DIR + '.Clips/')
+# path to train data file
+TRAIN_PATH = DATA_DIR + 'train.csv'
+# path to test data file
+TEST_PATH = DATA_DIR + 'test.csv'
+# directory of frames
+FRAME_DIR = DATA_DIR + 'Frames/'
 
-# For processing clips. l2 diff between frames must be greater than this
-MOVEMENT_THRESHOLD = 100
-# total number of processed clips in TRAIN_DIR_CLIPS
-NUM_CLIPS = len(glob(TRAIN_DIR_CLIPS + '*'))
+# num data points in total
+NUM_DATA = 99982
+# num test data points
+NUM_TEST = 1000
+# num train data points
+NUM_TRAIN = NUM_DATA - NUM_TEST
 
 # the height and width of the full frames to test on. Set in avg_runner.py main.
-TEST_HEIGHT = TEST_WIDTH = 0
-# the height and width of the patches to train on
-TRAIN_HEIGHT = TRAIN_WIDTH = 32
+FRAME_HEIGHT = 210
+FRAME_WIDTH = 160
 
 ##
 # Output
@@ -118,23 +119,21 @@ SUMMARY_SAVE_DIR = get_dir(SAVE_DIR + 'Summaries/' + SAVE_NAME)
 # directory for saved images
 IMG_SAVE_DIR = get_dir(SAVE_DIR + 'Images/' + SAVE_NAME)
 
-
 STATS_FREQ      = 10     # how often to print loss/train error stats, in # steps
 SUMMARY_FREQ    = 100    # how often to save the summaries, in # steps
-IMG_SAVE_FREQ   = 1000   # how often to save generated images, in # steps
+IMG_SAVE_FREQ   = 100   # how often to save generated images, in # steps
 TEST_FREQ       = 5000   # how often to test the model on test data, in # steps
-MODEL_SAVE_FREQ = 10000  # how often to save the model, in # steps
+MODEL_SAVE_FREQ = 1000  # how often to save the model, in # steps
 
 ##
 # General training
 ##
 
 # whether to use adversarial training vs. basic training of the generator
-ADVERSARIAL = True
+# ADVERSARIAL = True
+ADVERSARIAL = False
 # the training minibatch size
 BATCH_SIZE = 8
-# the number of history frames to give as input to the network
-HIST_LEN = 4
 
 ##
 # Loss parameters
@@ -159,17 +158,30 @@ LAM_GDL = 1
 LRATE_G = 0.00004  # Value in paper is 0.04
 # padding for convolutions in the generator model
 PADDING_G = 'SAME'
+# layer sizes for each fully-connected layer of each scale network in the discriminator model
+# SCALE_FC_LAYER_SIZES_G = [[6, 1024, 160 * 210 * 256],
+#                           [6, 1024, 160 * 210 * 256],
+#                           [6, 2048, 160 * 210 * 512],
+#                           [6, 2048, 160 * 210 * 512]]
+
+SCALE_FC_LAYER_SIZES_G = [[6, 2048, 160 * 210]]
+
 # feature maps for each convolution of each scale network in the generator model
-# e.g SCALE_FMS_G[1][2] is the input of the 3rd convolution in the 2nd scale network.
-SCALE_FMS_G = [[3 * HIST_LEN, 128, 256, 128, 3],
-               [3 * (HIST_LEN + 1), 128, 256, 128, 3],
-               [3 * (HIST_LEN + 1), 128, 256, 512, 256, 128, 3],
-               [3 * (HIST_LEN + 1), 128, 256, 512, 256, 128, 3]]
+# e.g SCALE_CONV_FMS_G[1][2] is the input of the 3rd convolution in the 2nd scale network.
+# SCALE_CONV_FMS_G = [[256, 128, 3],
+#                     [256, 128, 3],
+#                     [512, 256, 128, 3],
+#                     [512, 256, 128, 3]]
+
+SCALE_CONV_FMS_G = [[1, 128, 256, 512, 256, 128, 3]]
+
 # kernel sizes for each convolution of each scale network in the generator model
-SCALE_KERNEL_SIZES_G = [[3, 3, 3, 3],
-                        [5, 3, 3, 5],
-                        [5, 3, 3, 3, 3, 5],
-                        [7, 5, 5, 5, 5, 7]]
+# SCALE_KERNEL_SIZES_G = [[3, 3],
+#                         [3, 5],
+#                         [3, 3, 5],
+#                         [5, 5, 7]]
+
+SCALE_KERNEL_SIZES_G = [[5, 5, 7, 7, 5, 5]]
 
 
 ##

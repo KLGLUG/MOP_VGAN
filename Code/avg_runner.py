@@ -1,12 +1,13 @@
 import tensorflow as tf
 import getopt
 import sys
+import csv
 import os
 
-from utils import get_train_batch, get_test_batch
-import constants as c
-from g_model import GeneratorModel
+from utils import get_batch
 from d_model import DiscriminatorModel
+from g_model import GeneratorModel
+import constants as c
 
 
 class AVGRunner:
@@ -31,8 +32,8 @@ class AVGRunner:
             print 'Init discriminator...'
             self.d_model = DiscriminatorModel(self.sess,
                                               self.summary_writer,
-                                              c.TRAIN_HEIGHT,
-                                              c.TRAIN_WIDTH,
+                                              c.FRAME_HEIGHT,
+                                              c.FRAME_WIDTH,
                                               c.SCALE_CONV_FMS_D,
                                               c.SCALE_KERNEL_SIZES_D,
                                               c.SCALE_FC_LAYER_SIZES_D)
@@ -40,11 +41,10 @@ class AVGRunner:
         print 'Init generator...'
         self.g_model = GeneratorModel(self.sess,
                                       self.summary_writer,
-                                      c.TRAIN_HEIGHT,
-                                      c.TRAIN_WIDTH,
-                                      c.TEST_HEIGHT,
-                                      c.TEST_WIDTH,
-                                      c.SCALE_FMS_G,
+                                      c.FRAME_HEIGHT,
+                                      c.FRAME_WIDTH,
+                                      c.SCALE_FC_LAYER_SIZES_G,
+                                      c.SCALE_CONV_FMS_G,
                                       c.SCALE_KERNEL_SIZES_G)
 
         print 'Init variables...'
@@ -56,50 +56,55 @@ class AVGRunner:
             self.saver.restore(self.sess, model_load_path)
             print 'Model restored from ' + model_load_path
 
-    def train(self):
+    def train(self, num_epochs = 1):
         """
         Runs a training loop on the model networks.
         """
-        while True:
-            if c.ADVERSARIAL:
-                # update discriminator
-                batch = get_train_batch()
-                print 'Training discriminator...'
-                self.d_model.train_step(batch, self.g_model)
+        with open(c.TRAIN_PATH, 'rb') as train_file:
+            reader = csv.reader(train_file)
 
-            # update generator
-            batch = get_train_batch()
-            print 'Training generator...'
-            self.global_step = self.g_model.train_step(
-                batch, discriminator=(self.d_model if c.ADVERSARIAL else None))
+            # num lines to skip in loop (because they will be read as part of the batch getter)
+            skip_lines = c.BATCH_SIZE if c.ADVERSARIAL else 2 * c.BATCH_SIZE
+            for epoch in xrange(num_epochs):
+                for row_num in xrange(0, c.NUM_TRAIN, skip_lines):
+                    if c.ADVERSARIAL:
+                        # update discriminator
+                        batch = get_batch(reader)
+                        print 'Training discriminator...'
+                        self.d_model.train_step(batch, self.g_model)
 
-            # save the models
-            if self.global_step % c.MODEL_SAVE_FREQ == 0:
-                print '-' * 30
-                print 'Saving models...'
-                self.saver.save(self.sess,
-                                c.MODEL_SAVE_DIR + 'model.ckpt',
-                                global_step=self.global_step)
-                print 'Saved models!'
-                print '-' * 30
+                    # update generator
+                    batch = get_batch(reader)
+                    print 'Training generator...'
+                    self.global_step = self.g_model.train_step(
+                        batch, discriminator=(self.d_model if c.ADVERSARIAL else None))
 
-            # test generator model
-            if self.global_step % c.TEST_FREQ == 0:
-                self.test()
+                    # save the models
+                    if self.global_step % c.MODEL_SAVE_FREQ == 0:
+                        print '-' * 30
+                        print 'Saving models...'
+                        self.saver.save(self.sess,
+                                        c.MODEL_SAVE_DIR + 'model.ckpt',
+                                        global_step=self.global_step)
+                        print 'Saved models!'
+                        print '-' * 30
 
-    def test(self):
-        """
-        Runs one test step on the generator network.
-        """
-        batch = get_test_batch(c.BATCH_SIZE, num_rec_out=self.num_test_rec)
-        self.g_model.test_batch(
-            batch, self.global_step, num_rec_out=self.num_test_rec)
+                    # # test generator model
+                    # if self.global_step % c.TEST_FREQ == 0:
+                    #     self.test()
+
+    # def test(self):
+    #     """
+    #     Runs one test step on the generator network.
+    #     """
+    #     batch = get_test_batch(c.BATCH_SIZE, num_rec_out=self.num_test_rec)
+    #     self.g_model.test_batch(
+    #         batch, self.global_step, num_rec_out=self.num_test_rec)
 
 
 def usage():
     print 'Options:'
     print '-l/--load_path=    <Relative/path/to/saved/model>'
-    print '-t/--test_dir=     <Directory of test images>'
     print '-r/--recursions=   <# recursive predictions to make on test>'
     print '-a/--adversarial=  <{t/f}> (Whether to use adversarial training. Default=True)'
     print '-n/--name=         <Subdirectory of ../Data/Save/*/ in which to save output of this run>'
@@ -122,9 +127,9 @@ def main():
     test_only = False
     num_test_rec = 1  # number of recursive predictions to make on test
     try:
-        opts, _ = getopt.getopt(sys.argv[1:], 'l:t:r:a:n:OTH',
-                                ['load_path=', 'test_dir=', 'recursions=', 'adversarial=', 'name=',
-                                 'overwrite', 'test_only', 'help', 'stats_freq=', 'summary_freq=',
+        opts, _ = getopt.getopt(sys.argv[1:], 'l:r:a:n:OTH',
+                                ['load_path=', 'recursions=', 'adversarial=', 'name=', 'overwrite',
+                                 'test_only', 'help', 'stats_freq=', 'summary_freq=',
                                  'img_save_freq=', 'test_freq=', 'model_save_freq='])
     except getopt.GetoptError:
         usage()
@@ -133,8 +138,6 @@ def main():
     for opt, arg in opts:
         if opt in ('-l', '--load_path'):
             load_path = arg
-        if opt in ('-t', '--test_dir'):
-            c.set_test_dir(arg)
         if opt in ('-r', '--recursions'):
             num_test_rec = int(arg)
         if opt in ('-a', '--adversarial'):
@@ -159,19 +162,15 @@ def main():
         if opt == '--model_save_freq':
             c.MODEL_SAVE_FREQ = int(arg)
 
-    # set test frame dimensions
-    assert os.path.exists(c.TEST_DIR)
-    c.TEST_HEIGHT, c.TEST_WIDTH = c.get_test_frame_dims()
-
     ##
     # Init and run the predictor
     ##
 
     runner = AVGRunner(load_path, num_test_rec)
-    if test_only:
-        runner.test()
-    else:
-        runner.train()
+    # if test_only:
+    #     runner.test()
+    # else:
+    runner.train()
 
 
 if __name__ == '__main__':
