@@ -315,6 +315,7 @@ class GeneratorModel:
                     path = os.path.join(pred_dir, 'scale' + str(scale_num))
                     gt_img = scale_gts[scale_num][pred_num]
 
+                    print path
                     imsave(path + '_gen.png', gen_img)
                     imsave(path + '_gt.png', gt_img)
 
