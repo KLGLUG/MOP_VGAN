@@ -297,7 +297,6 @@ class GeneratorModel:
 
                 scale_gts.append(scaled_gt_frames)
 
-            imsave('test.png', scale_gts[0][0])
 
             # for every input in the batch, save the scale preds and scale gts
             for pred_num in xrange(len(gt_frames)):
@@ -308,6 +307,10 @@ class GeneratorModel:
                 # noinspection PyUnboundLocalVariable
                 for scale_num, scale_pred in enumerate(scale_preds):
                     gen_img = scale_pred[pred_num]
+
+                    print scale_num
+                    print pred_num
+                    imsave('test.png', scale_gts[scale_num][pred_num])
 
                     path = os.path.join(pred_dir, 'scale' + str(scale_num))
                     gt_img = scale_gts[scale_num][pred_num]
