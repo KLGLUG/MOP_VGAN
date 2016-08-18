@@ -308,16 +308,14 @@ class GeneratorModel:
                 for scale_num, scale_pred in enumerate(scale_preds):
                     gen_img = scale_pred[pred_num]
 
-                    print scale_num
-                    print pred_num
-                    imsave('test.png', scale_gts[scale_num][pred_num])
-
                     path = os.path.join(pred_dir, 'scale' + str(scale_num))
+                    imsave('test.png', scale_gts[scale_num][pred_num])
                     gt_img = scale_gts[scale_num][pred_num]
+                    imsave('test2.png', gt_img)
 
-                    print path
                     imsave(path + '_gen.png', gen_img)
                     imsave(path + '_gt.png', gt_img)
+
 
             print 'Saved images!'
             print '-' * 30
