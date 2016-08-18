@@ -227,7 +227,6 @@ class GeneratorModel:
         ##
 
         inputs, gt_frames = batch
-        imsave('test.png', gt_frames[0])
 
         ##
         # Train
@@ -290,13 +289,15 @@ class GeneratorModel:
                 for i, img in enumerate(gt_frames):
                     # for skimage.transform.resize, images need to be in range [0, 1], so normalize
                     # to [0, 1] before resize and back to [-1, 1] after
-                    # sknorm_img = (img / 2) + 0.5
-                    # resized_frame = resize(sknorm_img, [scale_height, scale_width, 3])
-                    # scaled_gt_frames[i] = (resized_frame - 0.5) * 2
+                    sknorm_img = (img / 2) + 0.5
+                    resized_frame = resize(sknorm_img, [scale_height, scale_width, 3])
+                    scaled_gt_frames[i] = (resized_frame - 0.5) * 2
 
                     scaled_gt_frames[i] = img
 
                 scale_gts.append(scaled_gt_frames)
+
+            imsave('test.png', scale_gts[0][0])
 
             # for every input in the batch, save the scale preds and scale gts
             for pred_num in xrange(len(gt_frames)):
