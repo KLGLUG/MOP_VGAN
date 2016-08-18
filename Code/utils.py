@@ -1,7 +1,8 @@
 import tensorflow as tf
 import numpy as np
-from scipy.ndimage import imread
+from scipy.misc import imread, imsave
 from glob import glob
+import os
 
 import constants as c
 from tfutils import log10
@@ -56,7 +57,8 @@ def get_batch(reader):
         row = reader.next()
 
         inputs[i] = row[:6]
-        gts[i] = imread(c.FRAME_DIR + row[-1])
+        gts[i] = imread(os.path.join(c.FRAME_DIR, row[-1]))
+        # imsave('/Users/matt/Desktop/test.png', gts[i])
 
     return inputs, gts
 
