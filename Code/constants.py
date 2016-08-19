@@ -155,7 +155,7 @@ LAM_GDL = 1
 ##
 
 # learning rate for the generator model
-LRATE_G = 0.000005  # Value in paper is 0.04
+LRATE_G = 0.00000001  # Value in paper is 0.04
 # padding for convolutions in the generator model
 PADDING_G = 'SAME'
 # layer sizes for each fully-connected layer of each scale network in the discriminator model
